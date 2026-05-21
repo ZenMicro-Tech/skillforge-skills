@@ -1,0 +1,16 @@
+[skill]
+name = "aws-cli"
+version = "0.1.0"
+description = "Read-only AWS dispatcher: routes {service, operation, args} to typed AWS SDK calls (S3, EC2, STS, IAM)."
+license = "Apache-2.0"
+
+[runtime]
+kind = "rust"
+entrypoint = "src/main.rs"
+determinism = "io-bounded"
+
+[interfaces]
+mcp  = true
+cli  = true
+http = true
+lib  = true
