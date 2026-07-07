@@ -1,0 +1,89 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "GitHub Skill Input",
+  "description": "Input for the GitHub API skill. Specify an operation and its arguments.",
+  "type": "object",
+  "properties": {
+    "operation": {
+      "type": "string",
+      "description": "The GitHub API operation to perform.",
+      "enum": [
+        "get-repo",
+        "list-issues",
+        "get-issue",
+        "create-issue",
+        "list-pulls",
+        "get-pull",
+        "create-pull",
+        "list-pull-files",
+        "create-review-comment",
+        "list-runs",
+        "list-releases"
+      ]
+    },
+    "args": {
+      "type": "object",
+      "description": "Arguments for the operation. Required fields depend on the operation.",
+      "properties": {
+        "owner": {
+          "type": "string",
+          "description": "Repository owner (user or organization)."
+        },
+        "repo": {
+          "type": "string",
+          "description": "Repository name."
+        },
+        "number": {
+          "type": "integer",
+          "description": "Issue or pull request number."
+        },
+        "state": {
+          "type": "string",
+          "description": "Filter by state.",
+          "enum": ["open", "closed", "all"]
+        },
+        "labels": {
+          "description": "Labels filter (comma-separated string for list-issues, or array for create-issue)."
+        },
+        "per_page": {
+          "type": "integer",
+          "description": "Number of results per page (max 100).",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "title": {
+          "type": "string",
+          "description": "Title for issues or pull requests."
+        },
+        "body": {
+          "type": "string",
+          "description": "Body text for issues, pull requests, or review comments."
+        },
+        "assignees": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of GitHub usernames to assign."
+        },
+        "head": {
+          "type": "string",
+          "description": "The branch containing the changes (for create-pull)."
+        },
+        "base": {
+          "type": "string",
+          "description": "The branch to merge into (for create-pull)."
+        },
+        "path": {
+          "type": "string",
+          "description": "File path for review comments."
+        },
+        "line": {
+          "type": "integer",
+          "description": "Line number for review comments."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "required": ["operation", "args"],
+  "additionalProperties": false
+}

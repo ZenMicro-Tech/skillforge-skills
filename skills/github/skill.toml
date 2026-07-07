@@ -1,0 +1,16 @@
+[skill]
+name = "github"
+version = "0.1.0"
+description = "GitHub API: issues, pull requests, reviews, repos, and actions via the REST API."
+license = "Apache-2.0"
+
+[runtime]
+kind = "rust"
+entrypoint = "src/main.rs"
+determinism = "io-bounded"
+
+[interfaces]
+mcp  = true
+cli  = true
+http = true
+lib  = true

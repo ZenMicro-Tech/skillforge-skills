@@ -1,0 +1,230 @@
+name: Build & Publish Skills
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  discover:
+    name: Discover skills
+    runs-on: ubuntu-latest
+    outputs:
+      skills: ${{ steps.find.outputs.skills }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: find
+        name: List skill directories
+        run: |
+          skills=$(ls skills/*/skill.toml 2>/dev/null \
+            | xargs -I{} dirname {} \
+            | xargs -I{} basename {} \
+            | grep -v '^example-skill$' \
+            | jq -R -s -c 'split("\n") | map(select(. != ""))')
+          echo "skills=$skills" >> "$GITHUB_OUTPUT"
+          echo "Found skills: $skills"
+
+  # Build each skill natively on its target platform
+  build-linux-amd64:
+    name: "Build ${{ matrix.skill }} (linux-amd64)"
+    needs: [discover]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        skill: ${{ fromJson(needs.discover.outputs.skills) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: ZenMicro-Tech/skillforge
+          path: ai-skills-platform
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: skills/${{ matrix.skill }}
+          shared-key: ${{ matrix.skill }}-linux-amd64
+      - name: Build
+        run: cargo build --release
+        working-directory: skills/${{ matrix.skill }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.skill }}-linux-amd64
+          path: skills/${{ matrix.skill }}/target/release/${{ matrix.skill }}*
+          if-no-files-found: error
+
+  build-linux-arm64:
+    name: "Build ${{ matrix.skill }} (linux-arm64)"
+    needs: [discover]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        skill: ${{ fromJson(needs.discover.outputs.skills) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: ZenMicro-Tech/skillforge
+          path: ai-skills-platform
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-gnu
+      - name: Install cross-compilation toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+          mkdir -p ~/.cargo
+          cat >> ~/.cargo/config.toml <<EOF
+          [target.aarch64-unknown-linux-gnu]
+          linker = "aarch64-linux-gnu-gcc"
+          EOF
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: skills/${{ matrix.skill }}
+          shared-key: ${{ matrix.skill }}-linux-arm64
+      - name: Build
+        run: cargo build --release --target aarch64-unknown-linux-gnu
+        working-directory: skills/${{ matrix.skill }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.skill }}-linux-arm64
+          path: skills/${{ matrix.skill }}/target/aarch64-unknown-linux-gnu/release/${{ matrix.skill }}*
+          if-no-files-found: error
+
+  build-darwin-amd64:
+    name: "Build ${{ matrix.skill }} (darwin-amd64)"
+    needs: [discover]
+    runs-on: macos-13
+    strategy:
+      fail-fast: false
+      matrix:
+        skill: ${{ fromJson(needs.discover.outputs.skills) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: ZenMicro-Tech/skillforge
+          path: ai-skills-platform
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: skills/${{ matrix.skill }}
+          shared-key: ${{ matrix.skill }}-darwin-amd64
+      - name: Build
+        run: cargo build --release
+        working-directory: skills/${{ matrix.skill }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.skill }}-darwin-amd64
+          path: skills/${{ matrix.skill }}/target/release/${{ matrix.skill }}*
+          if-no-files-found: error
+
+  build-darwin-arm64:
+    name: "Build ${{ matrix.skill }} (darwin-arm64)"
+    needs: [discover]
+    runs-on: macos-14
+    strategy:
+      fail-fast: false
+      matrix:
+        skill: ${{ fromJson(needs.discover.outputs.skills) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: ZenMicro-Tech/skillforge
+          path: ai-skills-platform
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: skills/${{ matrix.skill }}
+          shared-key: ${{ matrix.skill }}-darwin-arm64
+      - name: Build
+        run: cargo build --release
+        working-directory: skills/${{ matrix.skill }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.skill }}-darwin-arm64
+          path: skills/${{ matrix.skill }}/target/release/${{ matrix.skill }}*
+          if-no-files-found: error
+
+  publish:
+    name: "Publish ${{ matrix.skill }}"
+    needs: [discover, build-linux-amd64, build-linux-arm64, build-darwin-amd64, build-darwin-arm64]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        skill: ${{ fromJson(needs.discover.outputs.skills) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install skillforge CLI
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download --repo ZenMicro-Tech/skillforge --pattern "skillforge-x86_64-unknown-linux-gnu" --dir bin
+          mv bin/skillforge-x86_64-unknown-linux-gnu bin/skillforge
+          chmod +x bin/skillforge
+          echo "$PWD/bin" >> "$GITHUB_PATH"
+
+      - name: Download all platform binaries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ${{ matrix.skill }}-*
+          path: artifacts
+
+      - name: Arrange binaries into target layout
+        run: |
+          skill="${{ matrix.skill }}"
+          skill_dir="skills/${skill}"
+
+          declare -A target_map=(
+            ["linux-amd64"]="x86_64-unknown-linux-gnu"
+            ["linux-arm64"]="aarch64-unknown-linux-gnu"
+            ["darwin-amd64"]="x86_64-apple-darwin"
+            ["darwin-arm64"]="aarch64-apple-darwin"
+          )
+
+          for platform in linux-amd64 linux-arm64 darwin-amd64 darwin-arm64; do
+            target="${target_map[$platform]}"
+            src="artifacts/${skill}-${platform}"
+            dest="${skill_dir}/target/${target}/release"
+            mkdir -p "$dest"
+
+            # Find the binary (it's the file matching the skill name, without extensions)
+            bin=$(find "$src" -maxdepth 1 -type f -name "${skill}" -o -name "${skill}-*" | grep -v '\.' | head -1)
+            if [ -z "$bin" ]; then
+              bin=$(find "$src" -maxdepth 1 -type f | head -1)
+            fi
+
+            if [ -n "$bin" ]; then
+              cp "$bin" "${dest}/${skill}"
+              chmod +x "${dest}/${skill}"
+              echo "  ${platform} → ${dest}/${skill}"
+            else
+              echo "  WARNING: no binary found for ${platform}"
+            fi
+          done
+
+      - name: Publish to GHCR (multi-arch)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_USER: ${{ github.actor }}
+        run: |
+          skillforge publish ${{ matrix.skill }} \
+            --path skills/${{ matrix.skill }} \
+            --target x86_64-unknown-linux-gnu \
+            --target aarch64-unknown-linux-gnu \
+            --target x86_64-apple-darwin \
+            --target aarch64-apple-darwin

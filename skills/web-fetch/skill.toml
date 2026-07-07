@@ -1,0 +1,16 @@
+[skill]
+name = "web-fetch"
+version = "0.1.0"
+description = "Fetch a URL and return content as text or simplified markdown. Supports HTML-to-text conversion."
+license = "Apache-2.0"
+
+[runtime]
+kind = "rust"
+entrypoint = "src/main.rs"
+determinism = "io-bounded"
+
+[interfaces]
+mcp  = true
+cli  = true
+http = true
+lib  = true

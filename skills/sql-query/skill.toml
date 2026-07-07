@@ -1,0 +1,16 @@
+[skill]
+name = "sql-query"
+version = "0.1.0"
+description = "Execute read-only SQL queries against SQLite or PostgreSQL and return structured results."
+license = "Apache-2.0"
+
+[runtime]
+kind = "rust"
+entrypoint = "src/main.rs"
+determinism = "io-bounded"
+
+[interfaces]
+mcp  = true
+cli  = true
+http = true
+lib  = true

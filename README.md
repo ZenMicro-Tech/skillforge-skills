@@ -4,8 +4,12 @@ Reference and example skills for [skillforge](https://github.com/zenmicro-tech/a
 
 ## Skills
 
-- **[example-skill](skills/example-skill/)** — minimal echo skill. The smallest valid skillforge skill.
-- **[aws-cli](skills/aws-cli/)** — read-only AWS dispatcher (S3, EC2, STS, IAM) using the AWS Rust SDK.
+- **[aws-s3](skills/aws-s3/)** — S3 operations: list buckets/objects, get/head objects, versioning.
+- **[git](skills/git/)** — structured Git operations: status, diff, log, commit, branch, blame, stash.
+- **[github](skills/github/)** — GitHub API: issues, PRs, reviews, repos, and actions via REST.
+- **[http-client](skills/http-client/)** — generic REST client with auth, headers, query params, and body.
+- **[sql-query](skills/sql-query/)** — read-only SQL queries against SQLite or PostgreSQL.
+- **[web-fetch](skills/web-fetch/)** — fetch URLs and convert HTML to markdown/text for LLM consumption.
 
 ## Authoring a skill
 

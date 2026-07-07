@@ -1,7 +1,7 @@
 [skill]
-name = "aws-cli"
+name = "git"
 version = "0.1.0"
-description = "Read-only AWS dispatcher: routes {service, operation, args} to typed AWS SDK calls (S3, EC2, STS, IAM)."
+description = "Git operations: status, diff, log, commit, branch, checkout, and more."
 license = "Apache-2.0"
 
 [runtime]

@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "url": {
+      "type": "string",
+      "description": "The URL to fetch."
+    },
+    "options": {
+      "type": "object",
+      "description": "Optional configuration for the fetch operation.",
+      "properties": {
+        "format": {
+          "type": "string",
+          "enum": ["raw", "text", "markdown"],
+          "default": "markdown",
+          "description": "Output format: 'raw' returns body as-is, 'text' strips HTML tags, 'markdown' converts HTML to simplified markdown."
+        },
+        "headers": {
+          "type": "object",
+          "description": "Additional HTTP headers to send with the request.",
+          "additionalProperties": { "type": "string" }
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "default": 30000,
+          "description": "Request timeout in milliseconds."
+        },
+        "max_length": {
+          "type": "integer",
+          "default": 100000,
+          "description": "Maximum content length in characters. Content exceeding this limit is truncated."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "required": ["url"],
+  "additionalProperties": false
+}

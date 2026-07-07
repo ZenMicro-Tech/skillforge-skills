@@ -1,0 +1,182 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "operation": {
+      "type": "string",
+      "enum": [
+        "status",
+        "diff",
+        "log",
+        "commit",
+        "branch",
+        "checkout",
+        "show",
+        "blame",
+        "stash"
+      ],
+      "description": "The git operation to perform"
+    },
+    "repo_path": {
+      "type": "string",
+      "description": "Path to the git repository (defaults to current directory)",
+      "default": "."
+    },
+    "args": {
+      "type": "object",
+      "description": "Operation-specific arguments",
+      "oneOf": [
+        {
+          "title": "StatusArgs",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "Limit status to a specific path"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "title": "DiffArgs",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "Limit diff to a specific path"
+            },
+            "staged": {
+              "type": "boolean",
+              "description": "Show staged (cached) changes only"
+            },
+            "base": {
+              "type": "string",
+              "description": "Base ref to diff against (e.g., 'main', 'HEAD~3')"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "title": "LogArgs",
+          "properties": {
+            "max_count": {
+              "type": "integer",
+              "description": "Maximum number of commits to return (default: 10)",
+              "default": 10
+            },
+            "path": {
+              "type": "string",
+              "description": "Limit log to commits affecting this path"
+            },
+            "format": {
+              "type": "string",
+              "description": "Custom git log format string (raw output returned if set)"
+            },
+            "since": {
+              "type": "string",
+              "description": "Show commits since date (e.g., '2024-01-01', '2 weeks ago')"
+            },
+            "author": {
+              "type": "string",
+              "description": "Filter by author name or email"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "title": "CommitArgs",
+          "properties": {
+            "message": {
+              "type": "string",
+              "description": "Commit message (required)"
+            },
+            "paths": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Paths to stage before committing"
+            }
+          },
+          "required": ["message"],
+          "additionalProperties": false
+        },
+        {
+          "title": "BranchArgs",
+          "properties": {
+            "action": {
+              "type": "string",
+              "enum": ["list", "create", "delete"],
+              "description": "Branch action to perform"
+            },
+            "name": {
+              "type": "string",
+              "description": "Branch name (required for create/delete)"
+            }
+          },
+          "required": ["action"],
+          "additionalProperties": false
+        },
+        {
+          "title": "CheckoutArgs",
+          "properties": {
+            "target": {
+              "type": "string",
+              "description": "Branch name, tag, or commit to check out"
+            },
+            "create": {
+              "type": "boolean",
+              "description": "Create a new branch (equivalent to -b flag)"
+            }
+          },
+          "required": ["target"],
+          "additionalProperties": false
+        },
+        {
+          "title": "ShowArgs",
+          "properties": {
+            "ref": {
+              "type": "string",
+              "description": "Git ref to show (commit hash, tag, branch)"
+            },
+            "path": {
+              "type": "string",
+              "description": "Show file content at the given ref (uses ref:path syntax)"
+            }
+          },
+          "required": ["ref"],
+          "additionalProperties": false
+        },
+        {
+          "title": "BlameArgs",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "File path to blame (required)"
+            },
+            "lines": {
+              "type": "string",
+              "description": "Line range as 'start,end' (e.g., '10,20')"
+            }
+          },
+          "required": ["path"],
+          "additionalProperties": false
+        },
+        {
+          "title": "StashArgs",
+          "properties": {
+            "action": {
+              "type": "string",
+              "enum": ["push", "pop", "list"],
+              "description": "Stash action to perform"
+            },
+            "message": {
+              "type": "string",
+              "description": "Message for stash push"
+            }
+          },
+          "required": ["action"],
+          "additionalProperties": false
+        }
+      ]
+    }
+  },
+  "required": ["operation"],
+  "additionalProperties": false
+}

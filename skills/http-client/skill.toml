@@ -1,0 +1,16 @@
+[skill]
+name = "http-client"
+version = "0.1.0"
+description = "Generic HTTP client: make REST API requests with configurable method, headers, auth, and body."
+license = "Apache-2.0"
+
+[runtime]
+kind = "rust"
+entrypoint = "src/main.rs"
+determinism = "io-bounded"
+
+[interfaces]
+mcp  = true
+cli  = true
+http = true
+lib  = true

@@ -1,0 +1,25 @@
+[workspace]
+
+[package]
+name    = "sql-query"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "sql-query"
+path = "src/main.rs"
+
+[dependencies]
+skillforge-runtime = { path = "../../../ai-skills-platform/crates/skillforge-runtime" }
+anyhow             = "1"
+serde              = { version = "1", features = ["derive"] }
+serde_json         = "1"
+tokio              = { version = "1", features = ["rt", "macros"] }
+rusqlite           = { version = "0.31", features = ["bundled"] }
+tokio-postgres     = "0.7"
+
+[profile.release]
+lto           = "thin"
+codegen-units = 1
+strip         = "symbols"
+opt-level     = "z"

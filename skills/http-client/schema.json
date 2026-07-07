@@ -1,0 +1,60 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "method": {
+      "type": "string",
+      "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"],
+      "description": "HTTP method to use for the request",
+      "default": "GET"
+    },
+    "url": {
+      "type": "string",
+      "description": "The full URL to send the request to"
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "description": "HTTP headers as key-value pairs"
+    },
+    "query": {
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "description": "Query parameters as key-value pairs (appended to URL)"
+    },
+    "body": {
+      "description": "Request body: a JSON object (sent as application/json) or a string (sent as-is)"
+    },
+    "auth": {
+      "type": "object",
+      "description": "Authentication configuration",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["bearer", "basic"],
+          "description": "Authentication type"
+        },
+        "token": {
+          "type": "string",
+          "description": "Bearer token (used when type is 'bearer')"
+        },
+        "username": {
+          "type": "string",
+          "description": "Username for basic auth"
+        },
+        "password": {
+          "type": "string",
+          "description": "Password for basic auth"
+        }
+      },
+      "required": ["type"]
+    },
+    "timeout_ms": {
+      "type": "integer",
+      "description": "Request timeout in milliseconds (default: 30000)",
+      "default": 30000
+    }
+  },
+  "required": ["url"],
+  "additionalProperties": false
+}
