@@ -4,7 +4,6 @@ Reference and example skills for [skillforge](https://github.com/zenmicro-tech/a
 
 ## Skills
 
-- **[aws-s3](skills/aws-s3/)** — S3 operations: list buckets/objects, get/head objects, versioning.
 - **[git](skills/git/)** — structured Git operations: status, diff, log, commit, branch, blame, stash.
 - **[github](skills/github/)** — GitHub API: issues, PRs, reviews, repos, and actions via REST.
 - **[http-client](skills/http-client/)** — generic REST client with auth, headers, query params, and body.
