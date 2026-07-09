@@ -14,3 +14,6 @@ mcp  = true
 cli  = true
 http = true
 lib  = true
+
+[publish]
+repo = "ghcr.io/zenmicro-tech/skills/github"
