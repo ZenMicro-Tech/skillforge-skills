@@ -173,11 +173,7 @@ jobs:
             dest="${skill_dir}/target/${target}/release"
             mkdir -p "$dest"
 
-            # Find the binary (it's the file matching the skill name, without extensions)
-            bin=$(find "$src" -maxdepth 1 -type f -name "${skill}" -o -name "${skill}-*" | grep -v '\.' | head -1)
-            if [ -z "$bin" ]; then
-              bin=$(find "$src" -maxdepth 1 -type f | head -1)
-            fi
+            bin=$(find "$src" -maxdepth 1 -type f \( -name "${skill}" -o -name "${skill}-*" \) ! -name "*.d" ! -name "*.rlib" | head -1)
 
             if [ -n "$bin" ]; then
               cp "$bin" "${dest}/${skill}"
@@ -185,6 +181,8 @@ jobs:
               echo "  ${platform} → ${dest}/${skill}"
             else
               echo "  WARNING: no binary found for ${platform}"
+              ls -la "$src" || true
+              exit 1
             fi
           done
 
