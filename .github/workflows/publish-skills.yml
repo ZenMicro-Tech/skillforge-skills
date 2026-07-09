@@ -98,34 +98,6 @@ jobs:
           path: skills/${{ matrix.skill }}/target/aarch64-unknown-linux-gnu/release/${{ matrix.skill }}*
           if-no-files-found: error
 
-  build-darwin-amd64:
-    name: "Build ${{ matrix.skill }} (darwin-amd64)"
-    needs: [discover]
-    runs-on: macos-13
-    strategy:
-      fail-fast: false
-      matrix:
-        skill: ${{ fromJson(needs.discover.outputs.skills) }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
-        with:
-          repository: ZenMicro-Tech/skillforge
-          path: ai-skills-platform
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: skills/${{ matrix.skill }}
-          shared-key: ${{ matrix.skill }}-darwin-amd64
-      - name: Build
-        run: cargo build --release
-        working-directory: skills/${{ matrix.skill }}
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.skill }}-darwin-amd64
-          path: skills/${{ matrix.skill }}/target/release/${{ matrix.skill }}*
-          if-no-files-found: error
-
   build-darwin-arm64:
     name: "Build ${{ matrix.skill }} (darwin-arm64)"
     needs: [discover]
@@ -156,7 +128,7 @@ jobs:
 
   publish:
     name: "Publish ${{ matrix.skill }}"
-    needs: [discover, build-linux-amd64, build-linux-arm64, build-darwin-amd64, build-darwin-arm64]
+    needs: [discover, build-linux-amd64, build-linux-arm64, build-darwin-arm64]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
@@ -192,11 +164,10 @@ jobs:
           declare -A target_map=(
             ["linux-amd64"]="x86_64-unknown-linux-gnu"
             ["linux-arm64"]="aarch64-unknown-linux-gnu"
-            ["darwin-amd64"]="x86_64-apple-darwin"
             ["darwin-arm64"]="aarch64-apple-darwin"
           )
 
-          for platform in linux-amd64 linux-arm64 darwin-amd64 darwin-arm64; do
+          for platform in linux-amd64 linux-arm64 darwin-arm64; do
             target="${target_map[$platform]}"
             src="artifacts/${skill}-${platform}"
             dest="${skill_dir}/target/${target}/release"
@@ -226,5 +197,4 @@ jobs:
             --path skills/${{ matrix.skill }} \
             --target x86_64-unknown-linux-gnu \
             --target aarch64-unknown-linux-gnu \
-            --target x86_64-apple-darwin \
             --target aarch64-apple-darwin
