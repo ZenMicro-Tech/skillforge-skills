@@ -16,4 +16,4 @@ http = true
 lib  = true
 
 [publish]
-repo = "ghcr.io/zenmicro-tech/skills/web-fetch"
+repo = "ghcr.io/zenmicro-tech/skillforge/skills/web-fetch"
