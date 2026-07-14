@@ -2,3 +2,7 @@ target/
 Cargo.lock.bak
 **/*.rs.bk
 .DS_Store
+aws-cli
+aws-s3
+example-skill
+test-skill

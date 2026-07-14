@@ -16,4 +16,4 @@ http = true
 lib  = true
 
 [publish]
-repo = "ghcr.io/zenmicro-tech/skillforge/skills/http-client"
+registry = "ghcr.io/zenmicro-tech/skillforge/skills"
