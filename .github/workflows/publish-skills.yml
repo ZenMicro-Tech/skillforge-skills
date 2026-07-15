@@ -9,7 +9,6 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
-  REGISTRY: ghcr.io/zenmicro-tech/skillforge/skills
 
 jobs:
   discover:
@@ -49,18 +48,22 @@ jobs:
           repository: ZenMicro-Tech/skillforge
           path: skillforge
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+      - name: Install musl tools
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: skills/${{ matrix.skill }}
           shared-key: ${{ matrix.skill }}-linux-amd64
       - name: Build
-        run: cargo build --release
+        run: cargo build --release --target x86_64-unknown-linux-musl
         working-directory: skills/${{ matrix.skill }}
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.skill }}-x86_64-unknown-linux-gnu
-          path: skills/${{ matrix.skill }}/target/release/${{ matrix.skill }}
+          name: ${{ matrix.skill }}-x86_64-unknown-linux-musl
+          path: skills/${{ matrix.skill }}/target/x86_64-unknown-linux-musl/release/${{ matrix.skill }}
           retention-days: 1
 
   build-linux-arm64:
@@ -82,14 +85,14 @@ jobs:
           path: skillforge
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-unknown-linux-gnu
+          targets: aarch64-unknown-linux-musl
       - name: Install cross-compilation toolchain
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
           mkdir -p ~/.cargo
           cat >> ~/.cargo/config.toml <<EOF
-          [target.aarch64-unknown-linux-gnu]
+          [target.aarch64-unknown-linux-musl]
           linker = "aarch64-linux-gnu-gcc"
           EOF
       - uses: Swatinem/rust-cache@v2
@@ -97,13 +100,13 @@ jobs:
           workspaces: skills/${{ matrix.skill }}
           shared-key: ${{ matrix.skill }}-linux-arm64
       - name: Build
-        run: cargo build --release --target aarch64-unknown-linux-gnu
+        run: cargo build --release --target aarch64-unknown-linux-musl
         working-directory: skills/${{ matrix.skill }}
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.skill }}-aarch64-unknown-linux-gnu
-          path: skills/${{ matrix.skill }}/target/aarch64-unknown-linux-gnu/release/${{ matrix.skill }}
+          name: ${{ matrix.skill }}-aarch64-unknown-linux-musl
+          path: skills/${{ matrix.skill }}/target/aarch64-unknown-linux-musl/release/${{ matrix.skill }}
           retention-days: 1
 
   build-darwin-arm64:
@@ -139,7 +142,7 @@ jobs:
           retention-days: 1
 
   publish:
-    name: "Publish ${{ matrix.skill }} (all platforms)"
+    name: "Publish ${{ matrix.skill }}"
     needs: [discover, build-linux-amd64, build-linux-arm64, build-darwin-arm64]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -166,32 +169,17 @@ jobs:
           chmod +x bin/skillforge
           echo "$PWD/bin" >> "$GITHUB_PATH"
 
-      - name: Install ORAS
-        run: |
-          curl -sLO https://github.com/oras-project/oras/releases/download/v1.2.0/oras_1.2.0_linux_amd64.tar.gz
-          tar -xzf oras_1.2.0_linux_amd64.tar.gz
-          sudo mv oras /usr/local/bin/
-
-      - name: Log in to GHCR
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | oras login ghcr.io -u ${{ github.actor }} --password-stdin
-
-      - name: Read skill version
-        id: version
-        run: |
-          version=$(grep '^version' skills/${{ matrix.skill }}/skill.toml | sed 's/.*"\(.*\)".*/\1/')
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-
       - name: Download linux-amd64 binary
         uses: actions/download-artifact@v4
         with:
-          name: ${{ matrix.skill }}-x86_64-unknown-linux-gnu
-          path: skills/${{ matrix.skill }}/target/release
+          name: ${{ matrix.skill }}-x86_64-unknown-linux-musl
+          path: skills/${{ matrix.skill }}/target/x86_64-unknown-linux-musl/release
 
       - name: Download linux-arm64 binary
         uses: actions/download-artifact@v4
         with:
-          name: ${{ matrix.skill }}-aarch64-unknown-linux-gnu
-          path: skills/${{ matrix.skill }}/target/aarch64-unknown-linux-gnu/release
+          name: ${{ matrix.skill }}-aarch64-unknown-linux-musl
+          path: skills/${{ matrix.skill }}/target/aarch64-unknown-linux-musl/release
 
       - name: Download darwin-arm64 binary
         uses: actions/download-artifact@v4
@@ -199,65 +187,21 @@ jobs:
           name: ${{ matrix.skill }}-aarch64-apple-darwin
           path: skills/${{ matrix.skill }}/target/aarch64-apple-darwin/release
 
-      - name: Publish and tag all platforms
+      - name: Publish to GHCR
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_USER: ${{ github.actor }}
-          VERSION: ${{ steps.version.outputs.version }}
-          SKILL: ${{ matrix.skill }}
         run: |
-          IMAGE="${REGISTRY}/${SKILL}"
+          chmod +x skills/${{ matrix.skill }}/target/x86_64-unknown-linux-musl/release/${{ matrix.skill }}
+          chmod +x skills/${{ matrix.skill }}/target/aarch64-unknown-linux-musl/release/${{ matrix.skill }}
+          chmod +x skills/${{ matrix.skill }}/target/aarch64-apple-darwin/release/${{ matrix.skill }}
 
-          chmod +x skills/${SKILL}/target/release/${SKILL}
-          chmod +x skills/${SKILL}/target/aarch64-unknown-linux-gnu/release/${SKILL}
-          chmod +x skills/${SKILL}/target/aarch64-apple-darwin/release/${SKILL}
-
-          # Publish linux-amd64 and retag
-          skillforge publish ${SKILL} \
-            --path skills/${SKILL} \
-            --target x86_64-unknown-linux-gnu
-          oras tag "${IMAGE}:${VERSION}" "${VERSION}-linux-amd64"
-
-          # Publish linux-arm64 (overwrites :VERSION) and retag
-          skillforge publish ${SKILL} \
-            --path skills/${SKILL} \
-            --target aarch64-unknown-linux-gnu
-          oras tag "${IMAGE}:${VERSION}" "${VERSION}-linux-arm64"
-
-          # Publish darwin-arm64 (overwrites :VERSION) and retag
-          skillforge publish ${SKILL} \
-            --path skills/${SKILL} \
-            --target aarch64-apple-darwin
-          oras tag "${IMAGE}:${VERSION}" "${VERSION}-darwin-arm64"
-
-      - name: Create and push manifest index
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
-          SKILL: ${{ matrix.skill }}
-        run: |
-          IMAGE="${REGISTRY}/${SKILL}"
-
-          # Fetch each platform manifest descriptor
-          oras manifest fetch "${IMAGE}:${VERSION}-linux-amd64" --descriptor > linux-amd64.json
-          oras manifest fetch "${IMAGE}:${VERSION}-linux-arm64" --descriptor > linux-arm64.json
-          oras manifest fetch "${IMAGE}:${VERSION}-darwin-arm64" --descriptor > darwin-arm64.json
-
-          # Add platform annotations to each descriptor
-          jq '. + {"platform": {"os": "linux", "architecture": "amd64"}}' linux-amd64.json > linux-amd64-plat.json
-          jq '. + {"platform": {"os": "linux", "architecture": "arm64"}}' linux-arm64.json > linux-arm64-plat.json
-          jq '. + {"platform": {"os": "darwin", "architecture": "arm64"}}' darwin-arm64.json > darwin-arm64-plat.json
-
-          # Build the OCI image index
-          jq -n --slurpfile a linux-amd64-plat.json \
-                --slurpfile b linux-arm64-plat.json \
-                --slurpfile c darwin-arm64-plat.json \
-            '{schemaVersion: 2, mediaType: "application/vnd.oci.image.index.v1+json", manifests: [$a[0], $b[0], $c[0]]}' > index.json
-
-          # Push the manifest index as the canonical version tag
-          oras manifest push "${IMAGE}:${VERSION}" index.json
-          oras manifest push "${IMAGE}:latest" index.json
-
-          echo "Pushed manifest index for ${IMAGE}:${VERSION} with 3 platforms"
+          skillforge publish ${{ matrix.skill }} \
+            --path skills/${{ matrix.skill }} \
+            --repo ghcr.io/zenmicro-tech/skillforge/skills/${{ matrix.skill }} \
+            --target aarch64-apple-darwin \
+            --target x86_64-unknown-linux-musl \
+            --target aarch64-unknown-linux-musl
 
   # Build-only for PRs
   build-check:
