@@ -31,13 +31,12 @@ jobs:
           echo "skills=$skills" >> "$GITHUB_OUTPUT"
           echo "Found skills: $skills"
 
-  build-and-publish-linux-amd64:
-    name: "Build & Publish ${{ matrix.skill }} (linux-amd64)"
+  build-linux-amd64:
+    name: "Build ${{ matrix.skill }} (linux-amd64)"
     needs: [discover]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
-      packages: write
       contents: read
     strategy:
       fail-fast: false
@@ -54,34 +53,22 @@ jobs:
         with:
           workspaces: skills/${{ matrix.skill }}
           shared-key: ${{ matrix.skill }}-linux-amd64
-      - name: Install skillforge CLI
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release download --repo ZenMicro-Tech/skillforge --pattern "skillforge-x86_64-unknown-linux-gnu" --dir bin
-          mv bin/skillforge-x86_64-unknown-linux-gnu bin/skillforge
-          chmod +x bin/skillforge
-          echo "$PWD/bin" >> "$GITHUB_PATH"
       - name: Build
         run: cargo build --release
         working-directory: skills/${{ matrix.skill }}
-      - name: Publish to GHCR (platform tag)
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_USER: ${{ github.actor }}
-        run: |
-          skillforge publish ${{ matrix.skill }} \
-            --path skills/${{ matrix.skill }} \
-            --target x86_64-unknown-linux-gnu \
-            --tag-suffix linux-amd64
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.skill }}-x86_64-unknown-linux-gnu
+          path: skills/${{ matrix.skill }}/target/release/${{ matrix.skill }}
+          retention-days: 1
 
-  build-and-publish-linux-arm64:
-    name: "Build & Publish ${{ matrix.skill }} (linux-arm64)"
+  build-linux-arm64:
+    name: "Build ${{ matrix.skill }} (linux-arm64)"
     needs: [discover]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
-      packages: write
       contents: read
     strategy:
       fail-fast: false
@@ -109,34 +96,22 @@ jobs:
         with:
           workspaces: skills/${{ matrix.skill }}
           shared-key: ${{ matrix.skill }}-linux-arm64
-      - name: Install skillforge CLI
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release download --repo ZenMicro-Tech/skillforge --pattern "skillforge-x86_64-unknown-linux-gnu" --dir bin
-          mv bin/skillforge-x86_64-unknown-linux-gnu bin/skillforge
-          chmod +x bin/skillforge
-          echo "$PWD/bin" >> "$GITHUB_PATH"
       - name: Build
         run: cargo build --release --target aarch64-unknown-linux-gnu
         working-directory: skills/${{ matrix.skill }}
-      - name: Publish to GHCR (platform tag)
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_USER: ${{ github.actor }}
-        run: |
-          skillforge publish ${{ matrix.skill }} \
-            --path skills/${{ matrix.skill }} \
-            --target aarch64-unknown-linux-gnu \
-            --tag-suffix linux-arm64
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.skill }}-aarch64-unknown-linux-gnu
+          path: skills/${{ matrix.skill }}/target/aarch64-unknown-linux-gnu/release/${{ matrix.skill }}
+          retention-days: 1
 
-  build-and-publish-darwin-arm64:
-    name: "Build & Publish ${{ matrix.skill }} (darwin-arm64)"
+  build-darwin-arm64:
+    name: "Build ${{ matrix.skill }} (darwin-arm64)"
     needs: [discover]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: macos-14
     permissions:
-      packages: write
       contents: read
     strategy:
       fail-fast: false
@@ -153,30 +128,19 @@ jobs:
         with:
           workspaces: skills/${{ matrix.skill }}
           shared-key: ${{ matrix.skill }}-darwin-arm64
-      - name: Install skillforge CLI
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release download --repo ZenMicro-Tech/skillforge --pattern "skillforge-aarch64-apple-darwin" --dir bin
-          mv bin/skillforge-aarch64-apple-darwin bin/skillforge
-          chmod +x bin/skillforge
-          echo "$PWD/bin" >> "$GITHUB_PATH"
       - name: Build
         run: cargo build --release
         working-directory: skills/${{ matrix.skill }}
-      - name: Publish to GHCR (platform tag)
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_USER: ${{ github.actor }}
-        run: |
-          skillforge publish ${{ matrix.skill }} \
-            --path skills/${{ matrix.skill }} \
-            --target aarch64-apple-darwin \
-            --tag-suffix darwin-arm64
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.skill }}-aarch64-apple-darwin
+          path: skills/${{ matrix.skill }}/target/release/${{ matrix.skill }}
+          retention-days: 1
 
-  create-manifest-index:
-    name: "Create manifest index (${{ matrix.skill }})"
-    needs: [discover, build-and-publish-linux-amd64, build-and-publish-linux-arm64, build-and-publish-darwin-arm64]
+  publish:
+    name: "Publish ${{ matrix.skill }} (all platforms)"
+    needs: [discover, build-linux-amd64, build-linux-arm64, build-darwin-arm64]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
@@ -188,6 +152,28 @@ jobs:
         skill: ${{ fromJson(needs.discover.outputs.skills) }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: ZenMicro-Tech/skillforge
+          path: skillforge
+
+      - name: Install skillforge CLI
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download --repo ZenMicro-Tech/skillforge --pattern "skillforge-x86_64-unknown-linux-gnu" --dir bin
+          mv bin/skillforge-x86_64-unknown-linux-gnu bin/skillforge
+          chmod +x bin/skillforge
+          echo "$PWD/bin" >> "$GITHUB_PATH"
+
+      - name: Install ORAS
+        run: |
+          curl -sLO https://github.com/oras-project/oras/releases/download/v1.2.0/oras_1.2.0_linux_amd64.tar.gz
+          tar -xzf oras_1.2.0_linux_amd64.tar.gz
+          sudo mv oras /usr/local/bin/
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | oras login ghcr.io -u ${{ github.actor }} --password-stdin
 
       - name: Read skill version
         id: version
@@ -195,14 +181,54 @@ jobs:
           version=$(grep '^version' skills/${{ matrix.skill }}/skill.toml | sed 's/.*"\(.*\)".*/\1/')
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      - name: Log in to GHCR
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | oras login ghcr.io -u ${{ github.actor }} --password-stdin
+      - name: Download linux-amd64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.skill }}-x86_64-unknown-linux-gnu
+          path: skills/${{ matrix.skill }}/target/release
 
-      - name: Install ORAS
+      - name: Download linux-arm64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.skill }}-aarch64-unknown-linux-gnu
+          path: skills/${{ matrix.skill }}/target/aarch64-unknown-linux-gnu/release
+
+      - name: Download darwin-arm64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.skill }}-aarch64-apple-darwin
+          path: skills/${{ matrix.skill }}/target/aarch64-apple-darwin/release
+
+      - name: Publish and tag all platforms
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_USER: ${{ github.actor }}
+          VERSION: ${{ steps.version.outputs.version }}
+          SKILL: ${{ matrix.skill }}
         run: |
-          curl -LO https://github.com/oras-project/oras/releases/download/v1.2.0/oras_1.2.0_linux_amd64.tar.gz
-          tar -xzf oras_1.2.0_linux_amd64.tar.gz
-          sudo mv oras /usr/local/bin/
+          IMAGE="${REGISTRY}/${SKILL}"
+
+          chmod +x skills/${SKILL}/target/release/${SKILL}
+          chmod +x skills/${SKILL}/target/aarch64-unknown-linux-gnu/release/${SKILL}
+          chmod +x skills/${SKILL}/target/aarch64-apple-darwin/release/${SKILL}
+
+          # Publish linux-amd64 and retag
+          skillforge publish ${SKILL} \
+            --path skills/${SKILL} \
+            --target x86_64-unknown-linux-gnu
+          oras tag "${IMAGE}:${VERSION}" "${VERSION}-linux-amd64"
+
+          # Publish linux-arm64 (overwrites :VERSION) and retag
+          skillforge publish ${SKILL} \
+            --path skills/${SKILL} \
+            --target aarch64-unknown-linux-gnu
+          oras tag "${IMAGE}:${VERSION}" "${VERSION}-linux-arm64"
+
+          # Publish darwin-arm64 (overwrites :VERSION) and retag
+          skillforge publish ${SKILL} \
+            --path skills/${SKILL} \
+            --target aarch64-apple-darwin
+          oras tag "${IMAGE}:${VERSION}" "${VERSION}-darwin-arm64"
 
       - name: Create and push manifest index
         env:
@@ -211,6 +237,7 @@ jobs:
         run: |
           IMAGE="${REGISTRY}/${SKILL}"
 
+          # Fetch each platform manifest descriptor
           oras manifest fetch "${IMAGE}:${VERSION}-linux-amd64" --descriptor > linux-amd64.json
           oras manifest fetch "${IMAGE}:${VERSION}-linux-arm64" --descriptor > linux-arm64.json
           oras manifest fetch "${IMAGE}:${VERSION}-darwin-arm64" --descriptor > darwin-arm64.json
@@ -221,17 +248,10 @@ jobs:
           jq '. + {"platform": {"os": "darwin", "architecture": "arm64"}}' darwin-arm64.json > darwin-arm64-plat.json
 
           # Build the OCI image index
-          cat > index.json <<EOF
-          {
-            "schemaVersion": 2,
-            "mediaType": "application/vnd.oci.image.index.v1+json",
-            "manifests": [
-              $(cat linux-amd64-plat.json),
-              $(cat linux-arm64-plat.json),
-              $(cat darwin-arm64-plat.json)
-            ]
-          }
-          EOF
+          jq -n --slurpfile a linux-amd64-plat.json \
+                --slurpfile b linux-arm64-plat.json \
+                --slurpfile c darwin-arm64-plat.json \
+            '{schemaVersion: 2, mediaType: "application/vnd.oci.image.index.v1+json", manifests: [$a[0], $b[0], $c[0]]}' > index.json
 
           # Push the manifest index as the canonical version tag
           oras manifest push "${IMAGE}:${VERSION}" index.json
