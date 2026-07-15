@@ -70,7 +70,7 @@ jobs:
     name: "Build ${{ matrix.skill }} (linux-arm64)"
     needs: [discover]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     permissions:
       contents: read
     strategy:
@@ -86,17 +86,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-unknown-linux-musl
-      - name: Install cross-compilation toolchain
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y musl-tools
-          curl -sL https://musl.cc/aarch64-linux-musl-cross.tgz | sudo tar -xz -C /opt
-          echo "/opt/aarch64-linux-musl-cross/bin" >> "$GITHUB_PATH"
-          mkdir -p ~/.cargo
-          cat >> ~/.cargo/config.toml <<EOF
-          [target.aarch64-unknown-linux-musl]
-          linker = "aarch64-linux-musl-gcc"
-          EOF
+      - name: Install musl tools
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: skills/${{ matrix.skill }}
