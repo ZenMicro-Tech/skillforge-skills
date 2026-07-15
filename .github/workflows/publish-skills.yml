@@ -9,6 +9,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  REGISTRY: ghcr.io/zenmicro-tech/skillforge/skills
 
 jobs:
   discover:
@@ -64,14 +65,15 @@ jobs:
       - name: Build
         run: cargo build --release
         working-directory: skills/${{ matrix.skill }}
-      - name: Publish to GHCR
+      - name: Publish to GHCR (platform tag)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_USER: ${{ github.actor }}
         run: |
           skillforge publish ${{ matrix.skill }} \
             --path skills/${{ matrix.skill }} \
-            --target x86_64-unknown-linux-gnu
+            --target x86_64-unknown-linux-gnu \
+            --tag-suffix linux-amd64
 
   build-and-publish-linux-arm64:
     name: "Build & Publish ${{ matrix.skill }} (linux-arm64)"
@@ -118,14 +120,15 @@ jobs:
       - name: Build
         run: cargo build --release --target aarch64-unknown-linux-gnu
         working-directory: skills/${{ matrix.skill }}
-      - name: Publish to GHCR
+      - name: Publish to GHCR (platform tag)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_USER: ${{ github.actor }}
         run: |
           skillforge publish ${{ matrix.skill }} \
             --path skills/${{ matrix.skill }} \
-            --target aarch64-unknown-linux-gnu
+            --target aarch64-unknown-linux-gnu \
+            --tag-suffix linux-arm64
 
   build-and-publish-darwin-arm64:
     name: "Build & Publish ${{ matrix.skill }} (darwin-arm64)"
@@ -161,14 +164,80 @@ jobs:
       - name: Build
         run: cargo build --release
         working-directory: skills/${{ matrix.skill }}
-      - name: Publish to GHCR
+      - name: Publish to GHCR (platform tag)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_USER: ${{ github.actor }}
         run: |
           skillforge publish ${{ matrix.skill }} \
             --path skills/${{ matrix.skill }} \
-            --target aarch64-apple-darwin
+            --target aarch64-apple-darwin \
+            --tag-suffix darwin-arm64
+
+  create-manifest-index:
+    name: "Create manifest index (${{ matrix.skill }})"
+    needs: [discover, build-and-publish-linux-amd64, build-and-publish-linux-arm64, build-and-publish-darwin-arm64]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        skill: ${{ fromJson(needs.discover.outputs.skills) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read skill version
+        id: version
+        run: |
+          version=$(grep '^version' skills/${{ matrix.skill }}/skill.toml | sed 's/.*"\(.*\)".*/\1/')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | oras login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Install ORAS
+        run: |
+          curl -LO https://github.com/oras-project/oras/releases/download/v1.2.0/oras_1.2.0_linux_amd64.tar.gz
+          tar -xzf oras_1.2.0_linux_amd64.tar.gz
+          sudo mv oras /usr/local/bin/
+
+      - name: Create and push manifest index
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          SKILL: ${{ matrix.skill }}
+        run: |
+          IMAGE="${REGISTRY}/${SKILL}"
+
+          oras manifest fetch "${IMAGE}:${VERSION}-linux-amd64" --descriptor > linux-amd64.json
+          oras manifest fetch "${IMAGE}:${VERSION}-linux-arm64" --descriptor > linux-arm64.json
+          oras manifest fetch "${IMAGE}:${VERSION}-darwin-arm64" --descriptor > darwin-arm64.json
+
+          # Add platform annotations to each descriptor
+          jq '. + {"platform": {"os": "linux", "architecture": "amd64"}}' linux-amd64.json > linux-amd64-plat.json
+          jq '. + {"platform": {"os": "linux", "architecture": "arm64"}}' linux-arm64.json > linux-arm64-plat.json
+          jq '. + {"platform": {"os": "darwin", "architecture": "arm64"}}' darwin-arm64.json > darwin-arm64-plat.json
+
+          # Build the OCI image index
+          cat > index.json <<EOF
+          {
+            "schemaVersion": 2,
+            "mediaType": "application/vnd.oci.image.index.v1+json",
+            "manifests": [
+              $(cat linux-amd64-plat.json),
+              $(cat linux-arm64-plat.json),
+              $(cat darwin-arm64-plat.json)
+            ]
+          }
+          EOF
+
+          # Push the manifest index as the canonical version tag
+          oras manifest push "${IMAGE}:${VERSION}" index.json
+          oras manifest push "${IMAGE}:latest" index.json
+
+          echo "Pushed manifest index for ${IMAGE}:${VERSION} with 3 platforms"
 
   # Build-only for PRs
   build-check:
