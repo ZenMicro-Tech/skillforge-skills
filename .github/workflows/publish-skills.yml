@@ -30,12 +30,13 @@ jobs:
           echo "skills=$skills" >> "$GITHUB_OUTPUT"
           echo "Found skills: $skills"
 
-  build-linux-amd64:
-    name: "Build ${{ matrix.skill }} (linux-amd64)"
+  build-and-publish-linux-amd64:
+    name: "Build & Publish ${{ matrix.skill }} (linux-amd64)"
     needs: [discover]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
+      packages: write
       contents: read
     strategy:
       fail-fast: false
@@ -56,22 +57,30 @@ jobs:
         with:
           workspaces: skills/${{ matrix.skill }}
           shared-key: ${{ matrix.skill }}-linux-amd64
-      - name: Build
-        run: cargo build --release --target x86_64-unknown-linux-musl
-        working-directory: skills/${{ matrix.skill }}
-      - name: Upload binary
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.skill }}-x86_64-unknown-linux-musl
-          path: skills/${{ matrix.skill }}/target/x86_64-unknown-linux-musl/release/${{ matrix.skill }}
-          retention-days: 1
+      - name: Install skillforge CLI
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download --repo ZenMicro-Tech/skillforge --pattern "skillforge-x86_64-unknown-linux-gnu" --dir bin
+          mv bin/skillforge-x86_64-unknown-linux-gnu bin/skillforge
+          chmod +x bin/skillforge
+          echo "$PWD/bin" >> "$GITHUB_PATH"
+      - name: Build and publish
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_USER: ${{ github.actor }}
+        run: |
+          skillforge publish ${{ matrix.skill }} \
+            --path skills/${{ matrix.skill }} \
+            --target x86_64-unknown-linux-musl
 
-  build-linux-arm64:
-    name: "Build ${{ matrix.skill }} (linux-arm64)"
+  build-and-publish-linux-arm64:
+    name: "Build & Publish ${{ matrix.skill }} (linux-arm64)"
     needs: [discover]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04-arm
     permissions:
+      packages: write
       contents: read
     strategy:
       fail-fast: false
@@ -92,22 +101,30 @@ jobs:
         with:
           workspaces: skills/${{ matrix.skill }}
           shared-key: ${{ matrix.skill }}-linux-arm64
-      - name: Build
-        run: cargo build --release --target aarch64-unknown-linux-musl
-        working-directory: skills/${{ matrix.skill }}
-      - name: Upload binary
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.skill }}-aarch64-unknown-linux-musl
-          path: skills/${{ matrix.skill }}/target/aarch64-unknown-linux-musl/release/${{ matrix.skill }}
-          retention-days: 1
+      - name: Install skillforge CLI
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download --repo ZenMicro-Tech/skillforge --pattern "skillforge-aarch64-unknown-linux-gnu" --dir bin
+          mv bin/skillforge-aarch64-unknown-linux-gnu bin/skillforge
+          chmod +x bin/skillforge
+          echo "$PWD/bin" >> "$GITHUB_PATH"
+      - name: Build and publish
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_USER: ${{ github.actor }}
+        run: |
+          skillforge publish ${{ matrix.skill }} \
+            --path skills/${{ matrix.skill }} \
+            --target aarch64-unknown-linux-musl
 
-  build-darwin-arm64:
-    name: "Build ${{ matrix.skill }} (darwin-arm64)"
+  build-and-publish-darwin-arm64:
+    name: "Build & Publish ${{ matrix.skill }} (darwin-arm64)"
     needs: [discover]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: macos-14
     permissions:
+      packages: write
       contents: read
     strategy:
       fail-fast: false
@@ -124,19 +141,26 @@ jobs:
         with:
           workspaces: skills/${{ matrix.skill }}
           shared-key: ${{ matrix.skill }}-darwin-arm64
-      - name: Build
-        run: cargo build --release
-        working-directory: skills/${{ matrix.skill }}
-      - name: Upload binary
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.skill }}-aarch64-apple-darwin
-          path: skills/${{ matrix.skill }}/target/release/${{ matrix.skill }}
-          retention-days: 1
+      - name: Install skillforge CLI
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download --repo ZenMicro-Tech/skillforge --pattern "skillforge-aarch64-apple-darwin" --dir bin
+          mv bin/skillforge-aarch64-apple-darwin bin/skillforge
+          chmod +x bin/skillforge
+          echo "$PWD/bin" >> "$GITHUB_PATH"
+      - name: Build and publish
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_USER: ${{ github.actor }}
+        run: |
+          skillforge publish ${{ matrix.skill }} \
+            --path skills/${{ matrix.skill }} \
+            --target aarch64-apple-darwin
 
-  publish:
-    name: "Publish ${{ matrix.skill }}"
-    needs: [discover, build-linux-amd64, build-linux-arm64, build-darwin-arm64]
+  create-index:
+    name: "Create index (${{ matrix.skill }})"
+    needs: [discover, build-and-publish-linux-amd64, build-and-publish-linux-arm64, build-and-publish-darwin-arm64]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
@@ -152,7 +176,6 @@ jobs:
         with:
           repository: ZenMicro-Tech/skillforge
           path: skillforge
-
       - name: Install skillforge CLI
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -161,37 +184,14 @@ jobs:
           mv bin/skillforge-x86_64-unknown-linux-gnu bin/skillforge
           chmod +x bin/skillforge
           echo "$PWD/bin" >> "$GITHUB_PATH"
-
-      - name: Download linux-amd64 binary
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ matrix.skill }}-x86_64-unknown-linux-musl
-          path: skills/${{ matrix.skill }}/target/x86_64-unknown-linux-musl/release
-
-      - name: Download linux-arm64 binary
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ matrix.skill }}-aarch64-unknown-linux-musl
-          path: skills/${{ matrix.skill }}/target/aarch64-unknown-linux-musl/release
-
-      - name: Download darwin-arm64 binary
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ matrix.skill }}-aarch64-apple-darwin
-          path: skills/${{ matrix.skill }}/target/aarch64-apple-darwin/release
-
-      - name: Publish to GHCR
+      - name: Create manifest index
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_USER: ${{ github.actor }}
         run: |
-          chmod +x skills/${{ matrix.skill }}/target/x86_64-unknown-linux-musl/release/${{ matrix.skill }}
-          chmod +x skills/${{ matrix.skill }}/target/aarch64-unknown-linux-musl/release/${{ matrix.skill }}
-          chmod +x skills/${{ matrix.skill }}/target/aarch64-apple-darwin/release/${{ matrix.skill }}
-
           skillforge publish ${{ matrix.skill }} \
             --path skills/${{ matrix.skill }} \
-            --registry ghcr.io/zenmicro-tech/skillforge/skills/${{ matrix.skill }} \
+            --create-index \
             --target aarch64-apple-darwin \
             --target x86_64-unknown-linux-musl \
             --target aarch64-unknown-linux-musl
