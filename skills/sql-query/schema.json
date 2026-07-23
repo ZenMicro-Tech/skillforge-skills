@@ -15,11 +15,11 @@
       "properties": {
         "dsn": {
           "type": "string",
-          "description": "Data source name. Format: sqlite:///path/to/db.sqlite or postgres://user:pass@host:port/dbname"
+          "description": "Data source name. Format: sqlite:///path/to/db.sqlite or postgres://user:pass@host:port/dbname. PostgreSQL uses TLS by default; add ?sslmode=disable only for trusted local development."
         },
         "sql": {
           "type": "string",
-          "description": "The SQL query to execute (query operation only)."
+          "description": "Single SQL statement to execute (query operation only). Statements may read or modify data and schema."
         },
         "params": {
           "type": "array",
