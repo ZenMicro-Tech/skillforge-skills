@@ -1,7 +1,7 @@
 [skill]
 name = "sql-query"
-version = "0.1.0"
-description = "Execute read-only SQL queries against SQLite or PostgreSQL and return structured results."
+version = "0.3.0"
+description = "Execute SQL statements against SQLite or PostgreSQL and return structured results."
 license = "Apache-2.0"
 
 [runtime]

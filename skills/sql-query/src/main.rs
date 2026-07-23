@@ -1,21 +1,9 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use serde_json::{json, Value};
 use skillforge_runtime::{dispatch, Embedded, SkillHandler};
+use url::Url;
 
 struct Handler;
-
-// ---------------------------------------------------------------------------
-// Read-only enforcement
-// ---------------------------------------------------------------------------
-
-const FORBIDDEN_PREFIXES: &[&str] = &[
-    "INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "CREATE", "TRUNCATE",
-];
-
-fn is_read_only(sql: &str) -> bool {
-    let trimmed = sql.trim_start().to_uppercase();
-    !FORBIDDEN_PREFIXES.iter().any(|p| trimmed.starts_with(p))
-}
 
 // ---------------------------------------------------------------------------
 // DSN parsing
@@ -43,7 +31,7 @@ fn parse_dsn(dsn: &str) -> Result<Backend> {
 fn sqlite_query(path: &str, sql: &str, params: &[Value]) -> Result<Value> {
     let conn = rusqlite::Connection::open_with_flags(
         path,
-        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
     )?;
 
     let mut stmt = conn.prepare(sql)?;
@@ -57,7 +45,18 @@ fn sqlite_query(path: &str, sql: &str, params: &[Value]) -> Result<Value> {
         .map(|v| json_to_sqlite_param(v))
         .collect();
 
-    let param_refs: Vec<&dyn rusqlite::types::ToSql> = sqlite_params.iter().map(|b| b.as_ref()).collect();
+    let param_refs: Vec<&dyn rusqlite::types::ToSql> =
+        sqlite_params.iter().map(|b| b.as_ref()).collect();
+
+    if col_count == 0 {
+        let affected_rows = stmt.execute(param_refs.as_slice())?;
+        return Ok(json!({
+            "columns": [],
+            "rows": [],
+            "row_count": 0,
+            "affected_rows": affected_rows
+        }));
+    }
 
     let mut rows_out: Vec<Value> = Vec::new();
     let mut rows = stmt.query(param_refs.as_slice())?;
@@ -175,17 +174,61 @@ fn sqlite_describe(path: &str, table: &str) -> Result<Value> {
 // PostgreSQL helpers
 // ---------------------------------------------------------------------------
 
-async fn pg_query(dsn: &str, sql: &str, params: &[Value]) -> Result<Value> {
-    let (client, connection) = tokio_postgres::connect(dsn, tokio_postgres::NoTls).await?;
+/// Returns true only when the caller explicitly opts out of TLS.
+fn pg_tls_is_disabled(dsn: &str) -> Result<bool> {
+    let url = Url::parse(dsn).context("Invalid PostgreSQL connection string")?;
+    let sslmode = url
+        .query_pairs()
+        .find(|(name, _)| name == "sslmode")
+        .map(|(_, value)| value.into_owned());
 
+    match sslmode.as_deref() {
+        None | Some("require") | Some("verify-ca") | Some("verify-full") => Ok(false),
+        Some("disable") => Ok(true),
+        Some(mode) => Err(anyhow!(
+            "Unsupported PostgreSQL sslmode '{}'. Use require, verify-ca, verify-full, or disable.",
+            mode
+        )),
+    }
+}
+
+/// Builds a TLS connector using the public WebPKI root certificate store.
+/// Rustls validates the server certificate and the hostname from the DSN.
+fn pg_tls_connector() -> tokio_postgres_rustls::MakeRustlsConnect {
+    let root_store =
+        rustls::RootCertStore::from_iter(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+    let config = rustls::ClientConfig::builder()
+        .with_root_certificates(root_store)
+        .with_no_client_auth();
+
+    tokio_postgres_rustls::MakeRustlsConnect::new(config)
+}
+
+/// Connects with TLS by default. Plaintext is permitted only with
+/// `sslmode=disable`, intended solely for trusted local development.
+async fn pg_connect(dsn: &str) -> Result<tokio_postgres::Client> {
+    if pg_tls_is_disabled(dsn)? {
+        let (client, connection) = tokio_postgres::connect(dsn, tokio_postgres::NoTls).await?;
+        tokio::spawn(async move {
+            if let Err(e) = connection.await {
+                eprintln!("postgres connection error: {}", e);
+            }
+        });
+        return Ok(client);
+    }
+
+    let (client, connection) = tokio_postgres::connect(dsn, pg_tls_connector()).await?;
     tokio::spawn(async move {
         if let Err(e) = connection.await {
             eprintln!("postgres connection error: {}", e);
         }
     });
 
-    // Begin read-only transaction
-    client.batch_execute("BEGIN TRANSACTION READ ONLY").await?;
+    Ok(client)
+}
+
+async fn pg_query(dsn: &str, sql: &str, params: &[Value]) -> Result<Value> {
+    let client = pg_connect(dsn).await?;
 
     let pg_params: Vec<Box<dyn tokio_postgres::types::ToSql + Sync>> = params
         .iter()
@@ -196,6 +239,16 @@ async fn pg_query(dsn: &str, sql: &str, params: &[Value]) -> Result<Value> {
 
     let stmt = client.prepare(sql).await?;
     let columns: Vec<String> = stmt.columns().iter().map(|c| c.name().to_string()).collect();
+
+    if columns.is_empty() {
+        let affected_rows = client.execute(&stmt, param_refs.as_slice()).await?;
+        return Ok(json!({
+            "columns": [],
+            "rows": [],
+            "row_count": 0,
+            "affected_rows": affected_rows
+        }));
+    }
 
     let rows = client.query(&stmt, param_refs.as_slice()).await?;
 
@@ -209,8 +262,6 @@ async fn pg_query(dsn: &str, sql: &str, params: &[Value]) -> Result<Value> {
         rows_out.push(Value::Array(row_vec));
     }
 
-    client.batch_execute("ROLLBACK").await?;
-
     let row_count = rows_out.len();
     Ok(json!({
         "columns": columns,
@@ -220,13 +271,7 @@ async fn pg_query(dsn: &str, sql: &str, params: &[Value]) -> Result<Value> {
 }
 
 async fn pg_tables(dsn: &str) -> Result<Value> {
-    let (client, connection) = tokio_postgres::connect(dsn, tokio_postgres::NoTls).await?;
-
-    tokio::spawn(async move {
-        if let Err(e) = connection.await {
-            eprintln!("postgres connection error: {}", e);
-        }
-    });
+    let client = pg_connect(dsn).await?;
 
     let rows = client
         .query(
@@ -248,13 +293,7 @@ async fn pg_tables(dsn: &str) -> Result<Value> {
 }
 
 async fn pg_describe(dsn: &str, table: &str) -> Result<Value> {
-    let (client, connection) = tokio_postgres::connect(dsn, tokio_postgres::NoTls).await?;
-
-    tokio::spawn(async move {
-        if let Err(e) = connection.await {
-            eprintln!("postgres connection error: {}", e);
-        }
-    });
+    let client = pg_connect(dsn).await?;
 
     // Validate table name
     if !table.chars().all(|c| c.is_alphanumeric() || c == '_') {
@@ -397,12 +436,6 @@ impl Handler {
             .get("sql")
             .and_then(Value::as_str)
             .ok_or_else(|| anyhow!("Missing required field: args.sql"))?;
-
-        if !is_read_only(sql) {
-            return Err(anyhow!(
-                "Write operations are not allowed. Only SELECT and other read-only queries are permitted."
-            ));
-        }
 
         let params: Vec<Value> = args
             .get("params")

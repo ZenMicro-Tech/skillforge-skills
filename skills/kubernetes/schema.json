@@ -1,0 +1,76 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "kubernetes input",
+  "description": "Read-only Kubernetes cluster queries executed through kubectl.",
+  "type": "object",
+  "properties": {
+    "operation": {
+      "type": "string",
+      "enum": ["get", "describe", "logs", "api-resources"],
+      "description": "The read-only Kubernetes operation to perform."
+    },
+    "args": {
+      "type": "object",
+      "description": "Arguments for the selected operation.",
+      "properties": {
+        "resource": {
+          "type": "string",
+          "description": "Kubernetes resource type, such as pods, deployments, services, or configmaps. Required for get and describe."
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of a resource. Required for describe and optional for get."
+        },
+        "pod": {
+          "type": "string",
+          "description": "Pod name. Required for logs."
+        },
+        "namespace": {
+          "type": "string",
+          "description": "Namespace for the operation."
+        },
+        "all_namespaces": {
+          "type": "boolean",
+          "description": "List a resource across all namespaces. Only supported by get."
+        },
+        "label_selector": {
+          "type": "string",
+          "description": "Label selector passed to get, for example app=api."
+        },
+        "field_selector": {
+          "type": "string",
+          "description": "Field selector passed to get."
+        },
+        "container": {
+          "type": "string",
+          "description": "Container name for logs."
+        },
+        "tail_lines": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000,
+          "description": "Maximum number of log lines to return."
+        },
+        "since": {
+          "type": "string",
+          "description": "Log duration window accepted by kubectl, for example 15m or 1h."
+        },
+        "previous": {
+          "type": "boolean",
+          "description": "Return logs from the previous container instance."
+        },
+        "context": {
+          "type": "string",
+          "description": "Optional kubeconfig context name. Defaults to the active context."
+        },
+        "kubeconfig": {
+          "type": "string",
+          "description": "Optional path to a kubeconfig file. Defaults to kubectl's normal kubeconfig resolution."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "required": ["operation", "args"],
+  "additionalProperties": false
+}

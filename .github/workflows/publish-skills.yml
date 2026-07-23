@@ -15,20 +15,62 @@ jobs:
     name: Discover skills
     runs-on: ubuntu-latest
     outputs:
-      skills: ${{ steps.find.outputs.skills }}
+      skills: ${{ steps.filter.outputs.skills }}
     steps:
       - uses: actions/checkout@v4
 
       - id: find
-        name: List skill directories
+        name: List all skill directories
         run: |
           skills=$(ls skills/*/skill.toml 2>/dev/null \
             | xargs -I{} dirname {} \
             | xargs -I{} basename {} \
             | grep -v '^example-skill$' \
             | jq -R -s -c 'split("\n") | map(select(. != ""))')
-          echo "skills=$skills" >> "$GITHUB_OUTPUT"
-          echo "Found skills: $skills"
+          echo "all_skills=$skills" >> "$GITHUB_OUTPUT"
+          echo "All skills: $skills"
+
+      - name: Detect changed paths
+        uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            workflow:
+              - '.github/workflows/publish-skills.yml'
+            git:
+              - 'skills/git/**'
+            github:
+              - 'skills/github/**'
+            http-client:
+              - 'skills/http-client/**'
+            sql-query:
+              - 'skills/sql-query/**'
+            web-fetch:
+              - 'skills/web-fetch/**'
+
+      - id: filter
+        name: Determine which skills to build
+        run: |
+          ALL_SKILLS='${{ steps.find.outputs.all_skills }}'
+          CHANGED_FILTERS='${{ steps.changes.outputs.changes }}'
+
+          # If the workflow file itself changed, rebuild everything
+          if echo "$CHANGED_FILTERS" | jq -e '. | index("workflow")' > /dev/null 2>&1; then
+            echo "Workflow changed — rebuilding all skills"
+            echo "skills=$ALL_SKILLS" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Extract skill names from changed filters (exclude non-skill filters like "workflow")
+          CHANGED_SKILLS=$(echo "$CHANGED_FILTERS" | jq -c '[.[] | select(. != "workflow")]')
+
+          if [ "$CHANGED_SKILLS" = "[]" ]; then
+            echo "No skill changes detected — nothing to build"
+            echo "skills=[]" >> "$GITHUB_OUTPUT"
+          else
+            echo "Changed skills: $CHANGED_SKILLS"
+            echo "skills=$CHANGED_SKILLS" >> "$GITHUB_OUTPUT"
+          fi
 
   build-and-publish-linux-amd64:
     name: "Build & Publish ${{ matrix.skill }} (linux-amd64)"

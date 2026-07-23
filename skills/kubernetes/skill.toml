@@ -1,0 +1,19 @@
+[skill]
+name = "kubernetes"
+version = "0.1.0"
+description = "Query Kubernetes clusters through safe, read-only kubectl operations."
+license = "Apache-2.0"
+
+[runtime]
+kind = "rust"
+entrypoint = "src/main.rs"
+determinism = "io-bounded"
+
+[interfaces]
+mcp  = true
+cli  = true
+http = true
+lib  = true
+
+[publish]
+registry = "ghcr.io/zenmicro-tech/skillforge/skills"
