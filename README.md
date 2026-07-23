@@ -6,8 +6,9 @@ Reference and example skills for [skillforge](https://github.com/zenmicro-tech/a
 
 - **[git](skills/git/)** — structured Git operations: status, diff, log, commit, branch, blame, stash.
 - **[github](skills/github/)** — GitHub API: issues, PRs, reviews, repos, and actions via REST.
+- **[kubernetes](skills/kubernetes/)** — read-only Kubernetes cluster inspection through structured `kubectl` operations.
 - **[http-client](skills/http-client/)** — generic REST client with auth, headers, query params, and body.
-- **[sql-query](skills/sql-query/)** — read-only SQL queries against SQLite or PostgreSQL.
+- **[sql-query](skills/sql-query/)** — SQL statements against SQLite or PostgreSQL with structured results.
 - **[web-fetch](skills/web-fetch/)** — fetch URLs and convert HTML to markdown/text for LLM consumption.
 
 ## Authoring a skill

@@ -1,0 +1,21 @@
+[workspace]
+
+[package]
+name = "kubernetes"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "kubernetes"
+path = "src/main.rs"
+
+[dependencies]
+skillforge-runtime = { path = "../../skillforge/crates/skillforge-runtime" }
+anyhow             = "1"
+serde_json         = "1"
+
+[profile.release]
+lto           = "thin"
+codegen-units = 1
+strip         = "symbols"
+opt-level     = "z"
