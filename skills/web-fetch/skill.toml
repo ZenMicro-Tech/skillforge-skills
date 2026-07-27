@@ -1,6 +1,6 @@
 [skill]
 name = "web-fetch"
-version = "0.1.0"
+version = "0.1.1"
 description = "Fetch a URL and return content as text or simplified markdown. Supports HTML-to-text conversion."
 license = "Apache-2.0"
 
