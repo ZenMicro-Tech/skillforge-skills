@@ -1,7 +1,7 @@
 [skill]
 name = "kubernetes"
-version = "0.1.0"
-description = "Query Kubernetes clusters through safe, read-only kubectl operations."
+version = "0.2.0"
+description = "Query and modify Kubernetes clusters through kubectl operations."
 license = "Apache-2.0"
 
 [runtime]

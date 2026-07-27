@@ -1,6 +1,6 @@
 # kubernetes
 
-Query Kubernetes clusters through a small, read-only set of `kubectl` operations.
+Query and modify Kubernetes clusters through structured operations or direct `kubectl` commands.
 
 ## Authentication and cluster selection
 
@@ -13,16 +13,11 @@ The skill invokes the locally installed `kubectl` executable. Authentication, au
 
 Do not place tokens, certificates, or credentials directly in the input.
 
-## Safety
+## Capabilities
 
-This skill is intentionally read-only. It supports only:
+The structured `get`, `describe`, `logs`, and `api-resources` operations provide predictable output for common queries. The `kubectl` operation accepts arbitrary arguments and supports the full CLI, including mutating commands such as `apply`, `create`, `delete`, `patch`, and `scale`.
 
-- `get`
-- `describe`
-- `logs`
-- `api-resources`
-
-It does not expose arbitrary `kubectl` arguments or mutating commands such as `apply`, `create`, `delete`, `patch`, `scale`, `exec`, or `port-forward`.
+Use mutating commands only when requested and review the target context, namespace, resource, and command arguments before execution. Kubernetes RBAC permissions still apply.
 
 ## Operations
 
@@ -100,7 +95,45 @@ List resource types known by the selected cluster.
 { "ok": true, "data": { "resources": ["pods", "deployments.apps", "services"] } }
 ```
 
+### `kubectl`
+
+Run any `kubectl` command, including commands that modify cluster resources.
+
+**Args:**
+- `command` (required): Non-empty array of arguments passed directly to `kubectl`, excluding the executable name.
+- `context` (optional): Kubeconfig context, prepended as a global option.
+- `kubeconfig` (optional): Path to a kubeconfig file, prepended as a global option.
+
+The command is executed directly without a shell. Shell operators such as pipes and redirections are not interpreted.
+
+**Returns:**
+```json
+{ "ok": true, "data": { "text": "deployment.apps/api scaled\n" } }
+```
+
 ## Examples
+
+**Scale a deployment:**
+```json
+{
+  "operation": "kubectl",
+  "args": {
+    "command": ["scale", "deployment/api", "--replicas=3", "--namespace=production"],
+    "context": "production"
+  }
+}
+```
+
+**Apply a manifest:**
+```json
+{
+  "operation": "kubectl",
+  "args": {
+    "command": ["apply", "--filename=deployment.yaml"],
+    "context": "production"
+  }
+}
+```
 
 **List pods in a namespace:**
 ```json

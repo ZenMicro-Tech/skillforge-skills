@@ -16,7 +16,7 @@ struct Input {
     options: Options,
 }
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Deserialize)]
 struct Options {
     #[serde(default = "default_format")]
     format: Format,
@@ -26,6 +26,17 @@ struct Options {
     timeout_ms: u64,
     #[serde(default = "default_max_length")]
     max_length: usize,
+}
+
+impl Default for Options {
+    fn default() -> Self {
+        Self {
+            format: default_format(),
+            headers: HashMap::new(),
+            timeout_ms: default_timeout(),
+            max_length: default_max_length(),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Default, Clone, Copy, PartialEq, Eq)]
