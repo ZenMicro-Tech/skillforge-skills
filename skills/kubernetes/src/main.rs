@@ -20,8 +20,9 @@ impl SkillHandler for Handler {
             "describe" => describe_resource(args),
             "logs" => get_logs(args),
             "api-resources" => list_api_resources(args),
+            "kubectl" => run_kubectl_command(args),
             other => Err(anyhow!(
-                "Unsupported operation '{}'. Use get, describe, logs, or api-resources.",
+                "Unsupported operation '{}'. Use get, describe, logs, api-resources, or kubectl.",
                 other
             )),
         };
@@ -131,6 +132,12 @@ fn list_api_resources(args: &Value) -> Result<Value> {
         .collect();
 
     Ok(json!({ "resources": resources }))
+}
+
+fn run_kubectl_command(args: &Value) -> Result<Value> {
+    let command_args = required_string_array(args, "command")?;
+    let stdout = run_kubectl(args, command_args)?;
+    Ok(json!({ "text": stdout }))
 }
 
 fn run_kubectl(args: &Value, command_args: Vec<String>) -> Result<String> {
@@ -253,6 +260,33 @@ fn optional_u64(object: &Value, field: &str) -> Result<Option<u64>> {
     }
 }
 
+fn required_string_array(object: &Value, field: &str) -> Result<Vec<String>> {
+    let values = object
+        .get(field)
+        .and_then(Value::as_array)
+        .ok_or_else(|| anyhow!("Missing required array field: {field}"))?;
+
+    if values.is_empty() {
+        return Err(anyhow!("Field '{field}' must contain at least one argument"));
+    }
+
+    values
+        .iter()
+        .map(|value| {
+            let value = value
+                .as_str()
+                .ok_or_else(|| anyhow!("Every item in field '{field}' must be a string"))?;
+            if value.is_empty() {
+                return Err(anyhow!("Field '{field}' must not contain empty arguments"));
+            }
+            if value.contains('\0') {
+                return Err(anyhow!("Field '{field}' must not contain null bytes"));
+            }
+            Ok(value.to_string())
+        })
+        .collect()
+}
+
 fn main() -> Result<()> {
     let embedded = Embedded {
         manifest_toml: include_str!(concat!(env!("OUT_DIR"), "/skill.toml")),
@@ -291,5 +325,18 @@ mod tests {
         }));
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn kubectl_command_requires_arguments() {
+        assert!(required_string_array(&json!({ "command": [] }), "command").is_err());
+        assert_eq!(
+            required_string_array(
+                &json!({ "command": ["scale", "deployment/api", "--replicas=3"] }),
+                "command"
+            )
+            .unwrap(),
+            vec!["scale", "deployment/api", "--replicas=3"]
+        );
     }
 }

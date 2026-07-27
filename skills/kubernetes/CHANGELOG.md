@@ -2,6 +2,12 @@
 
 All notable changes to the `kubernetes` skill are documented in this file.
 
+## [0.2.0] - 2026-07-27
+
+### Added
+
+- Unrestricted `kubectl` operation supporting mutating commands and arbitrary CLI arguments.
+
 ## [0.1.0] - 2026-07-22
 
 ### Added

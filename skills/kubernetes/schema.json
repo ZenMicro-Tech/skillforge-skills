@@ -1,13 +1,13 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "kubernetes input",
-  "description": "Read-only Kubernetes cluster queries executed through kubectl.",
+  "description": "Query and modify Kubernetes clusters through kubectl.",
   "type": "object",
   "properties": {
     "operation": {
       "type": "string",
-      "enum": ["get", "describe", "logs", "api-resources"],
-      "description": "The read-only Kubernetes operation to perform."
+      "enum": ["get", "describe", "logs", "api-resources", "kubectl"],
+      "description": "The Kubernetes operation to perform. Use kubectl to run any kubectl command, including mutating commands."
     },
     "args": {
       "type": "object",
@@ -66,6 +66,15 @@
         "kubeconfig": {
           "type": "string",
           "description": "Optional path to a kubeconfig file. Defaults to kubectl's normal kubeconfig resolution."
+        },
+        "command": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Arguments passed directly to kubectl for the kubectl operation, for example [\"apply\", \"-f\", \"deployment.yaml\"]."
         }
       },
       "additionalProperties": false
